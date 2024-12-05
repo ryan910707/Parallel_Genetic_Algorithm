@@ -1,8 +1,8 @@
 import random
 
-FILENAME = "n10.txt"
+FILENAME = "n5.txt"
 KNAPSACK_CAPACITY = 120
-ITEMS_NUM = 10
+ITEMS_NUM = 5
 MAX_WEIGHT = 50
 MAX_VALUE = 100
 

@@ -2,21 +2,22 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define POP_SIZE 100
-#define GENE_LENGTH 8  // Number of items
-#define GENERATIONS 1000
-#define MUTATION_RATE 0.05
-#define CROSSOVER_RATE 0.7
-#define KNAPSACK_CAPACITY 120
+int POP_SIZE = 100;
+int ITEMS_NUM;// Number of items
+int GENERATIONS = 2000;
+int MUTATION_RATE = 0.05;
+int CROSSOVER_RATE = 0.7;
+int KNAPSACK_CAPACITY;
 
 typedef struct {
-    int genes[GENE_LENGTH];  // Binary representation of the knapsack selection
+    int *genes;  // Binary representation of the knapsack selection
     int fitness;
 } Individual;
 
-int weights[GENE_LENGTH] = {10, 20, 30, 40, 50, 60, 70, 80};  // Weights of the items
-int values[GENE_LENGTH] = {60, 100, 130, 150, 180, 250, 300};  // Values of the items
+int *weights;  // Weights of the items
+int *values;
 
+void input(const char* filename);
 void initialize_population(Individual population[]);
 void evaluate_population(Individual population[]);
 int calculate_fitness(Individual individual);
@@ -26,10 +27,12 @@ void mutate(Individual *individual);
 int get_total_weight(Individual individual);
 int get_total_value(Individual individual);
 
-int main() {
+int main(int argc, char** argv) {
     srand(time(0));
     Individual population[POP_SIZE], new_population[POP_SIZE];
     int generation = 0;
+
+    input(argv[1]);
 
     initialize_population(population);
     evaluate_population(population);
@@ -57,7 +60,7 @@ int main() {
 
     printf("Best solution found in generation %d with fitness %d:\n", GENERATIONS, best_fitness);
     printf("Items included (binary): ");
-    for (int i = 0; i < GENE_LENGTH; i++) {
+    for (int i = 0; i < ITEMS_NUM; i++) {
         printf("%d ", population[best_index].genes[i]);
     }
     printf("\n");
@@ -67,9 +70,23 @@ int main() {
     return 0;
 }
 
+void input(const char* filename) {
+    FILE* file = fopen(filename, "r");
+    fscanf(file, "%d", &KNAPSACK_CAPACITY);
+    fscanf(file, "%d", &ITEMS_NUM);
+
+    weights = (int*)malloc(ITEMS_NUM * sizeof(int));
+    values = (int*)malloc(ITEMS_NUM * sizeof(int));
+
+    for (int i = 0; i < ITEMS_NUM; i++) {
+        fscanf(file, "%d %d", &weights[i], &values[i]);
+    }
+}
+
 void initialize_population(Individual population[]) {
     for (int i = 0; i < POP_SIZE; i++) {
-        for (int j = 0; j < GENE_LENGTH; j++) {
+        population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
+        for (int j = 0; j < ITEMS_NUM; j++) {
             population[i].genes[j] = rand() % 2;  // Random 0 or 1
         }
     }
@@ -94,7 +111,7 @@ int calculate_fitness(Individual individual) {
 
 int get_total_weight(Individual individual) {
     int total_weight = 0;
-    for (int i = 0; i < GENE_LENGTH; i++) {
+    for (int i = 0; i < ITEMS_NUM; i++) {
         if (individual.genes[i] == 1) {
             total_weight += weights[i];
         }
@@ -104,7 +121,7 @@ int get_total_weight(Individual individual) {
 
 int get_total_value(Individual individual) {
     int total_value = 0;
-    for (int i = 0; i < GENE_LENGTH; i++) {
+    for (int i = 0; i < ITEMS_NUM; i++) {
         if (individual.genes[i] == 1) {
             total_value += values[i];
         }
@@ -123,12 +140,12 @@ void selection(Individual population[], Individual new_population[]) {
 
 void crossover(Individual parent1, Individual parent2, Individual *child1, Individual *child2) {
     if ((rand() / (float)RAND_MAX) < CROSSOVER_RATE) {
-        int crossover_point = rand() % GENE_LENGTH;
+        int crossover_point = rand() % ITEMS_NUM;
         for (int i = 0; i < crossover_point; i++) {
             child1->genes[i] = parent1.genes[i];
             child2->genes[i] = parent2.genes[i];
         }
-        for (int i = crossover_point; i < GENE_LENGTH; i++) {
+        for (int i = crossover_point; i < ITEMS_NUM; i++) {
             child1->genes[i] = parent2.genes[i];
             child2->genes[i] = parent1.genes[i];
         }
@@ -139,7 +156,7 @@ void crossover(Individual parent1, Individual parent2, Individual *child1, Indiv
 }
 
 void mutate(Individual *individual) {
-    for (int i = 0; i < GENE_LENGTH; i++) {
+    for (int i = 0; i < ITEMS_NUM; i++) {
         if ((rand() / (float)RAND_MAX) < MUTATION_RATE) {
             individual->genes[i] = 1 - individual->genes[i];  // Flip the gene (0 to 1, or 1 to 0)
         }
