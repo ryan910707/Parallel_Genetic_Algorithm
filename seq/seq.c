@@ -4,7 +4,7 @@
 
 int POP_SIZE = 100;
 int ITEMS_NUM;// Number of items
-int GENERATIONS = 2000;
+int GENERATIONS;
 int MUTATION_RATE = 0.05;
 int CROSSOVER_RATE = 0.7;
 int KNAPSACK_CAPACITY;
@@ -28,7 +28,8 @@ int get_total_weight(Individual individual);
 int get_total_value(Individual individual);
 
 int main(int argc, char** argv) {
-    srand(time(0));
+    clock_t start_time = clock();
+    srand(1);
     Individual population[POP_SIZE], new_population[POP_SIZE];
     int generation = 0;
 
@@ -58,6 +59,10 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Timer ends
+    clock_t end_time = clock();
+    double elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+
     printf("Best solution found in generation %d with fitness %d:\n", GENERATIONS, best_fitness);
     printf("Items included (binary): ");
     for (int i = 0; i < ITEMS_NUM; i++) {
@@ -67,6 +72,8 @@ int main(int argc, char** argv) {
 
     printf("Total weight: %d, Total value: %d\n", get_total_weight(population[best_index]), get_total_value(population[best_index]));
 
+    printf("Execution time: %.2f seconds\n", elapsed_time);
+
     return 0;
 }
 
@@ -74,6 +81,7 @@ void input(const char* filename) {
     FILE* file = fopen(filename, "r");
     fscanf(file, "%d", &KNAPSACK_CAPACITY);
     fscanf(file, "%d", &ITEMS_NUM);
+    fscanf(file, "%d", &GENERATIONS);
 
     weights = (int*)malloc(ITEMS_NUM * sizeof(int));
     values = (int*)malloc(ITEMS_NUM * sizeof(int));
