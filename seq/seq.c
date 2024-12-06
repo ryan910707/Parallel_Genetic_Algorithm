@@ -2,11 +2,11 @@
 #include <stdlib.h>
 #include <time.h>
 
-int POP_SIZE = 100;
+int POP_SIZE = 1000;
 int ITEMS_NUM;// Number of items
 int GENERATIONS;
-int MUTATION_RATE = 0.05;
-int CROSSOVER_RATE = 0.7;
+float MUTATION_RATE = 0.05;
+float CROSSOVER_RATE = 0.7;
 int KNAPSACK_CAPACITY;
 
 typedef struct {
@@ -71,6 +71,7 @@ int main(int argc, char** argv) {
     printf("\n");
 
     printf("Total weight: %d, Total value: %d\n", get_total_weight(population[best_index]), get_total_value(population[best_index]));
+    printf("capacity: %d\n", KNAPSACK_CAPACITY);
 
     printf("Execution time: %.2f seconds\n", elapsed_time);
 
@@ -142,9 +143,23 @@ void selection(Individual population[], Individual new_population[]) {
         // Tournament selection: pick two random individuals and select the best one
         int parent1 = rand() % POP_SIZE;
         int parent2 = rand() % POP_SIZE;
-        new_population[i] = population[parent1].fitness > population[parent2].fitness ? population[parent1] : population[parent2];
+        
+        // Select the better parent
+        Individual selected = (population[parent1].fitness > population[parent2].fitness) ? population[parent1] : population[parent2];
+        
+        // Allocate memory for the new individual's genes
+        new_population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
+        
+        // Copy the genes from the selected parent to the new individual
+        for (int j = 0; j < ITEMS_NUM; j++) {
+            new_population[i].genes[j] = selected.genes[j];
+        }
+        
+        // Copy the fitness value
+        new_population[i].fitness = selected.fitness;
     }
 }
+
 
 void crossover(Individual parent1, Individual parent2, Individual *child1, Individual *child2) {
     if ((rand() / (float)RAND_MAX) < CROSSOVER_RATE) {
