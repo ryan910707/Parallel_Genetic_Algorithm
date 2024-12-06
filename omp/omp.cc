@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <omp.h>
+#include <climits>
 
 int POP_SIZE;
 int ITEMS_NUM;  // Number of items
@@ -57,7 +58,6 @@ int main(int argc, char** argv) {
     while (generation < GENERATIONS) {
         selection(population, new_population);
 
-        // #pragma omp parallel for schedule(static)
         for (int i = 0; i < POP_SIZE; i += 2) {
             crossover(new_population[i], new_population[i + 1], &population[i], &population[i + 1]);
             mutate(&population[i]);
@@ -69,12 +69,29 @@ int main(int argc, char** argv) {
     }
 
     // Output the best solution found
-    int best_fitness = population[0].fitness;
-    int best_index = 0;
-    for (int i = 1; i < POP_SIZE; i++) {
-        if (population[i].fitness > best_fitness) {
-            best_fitness = population[i].fitness;
-            best_index = i;
+    int best_fitness = population[0].fitness; // Or appropriate minimum value
+    int best_index = -1;
+    #pragma omp parallel
+    {
+        // Each thread maintains a local best
+        int local_best_fitness = INT_MIN;
+        int local_best_index = -1;
+
+        #pragma omp for
+        for (int i = 0; i < POP_SIZE; i++) {
+            if (population[i].fitness > local_best_fitness) {
+                local_best_fitness = population[i].fitness;
+                local_best_index = i;
+            }
+        }
+
+        // Now update the global best in a thread-safe manner
+        #pragma omp critical
+        {
+            if (local_best_fitness > best_fitness) {
+                best_fitness = local_best_fitness;
+                best_index = local_best_index;
+            }
         }
     }
 
