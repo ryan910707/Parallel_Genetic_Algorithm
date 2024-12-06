@@ -123,7 +123,7 @@ void input(const char* filename) {
 void initialize_population(Individual population[]) {
     #pragma omp parallel
     {
-        unsigned int seed = time(NULL) ^ omp_get_thread_num();  // Unique seed for each thread
+        unsigned int seed = omp_get_thread_num();  // Unique seed for each thread
 
         #pragma omp for
         for (int i = 0; i < POP_SIZE; i++) {
@@ -177,7 +177,7 @@ int get_total_value(Individual individual) {
 void selection(Individual population[], Individual new_population[]) {
     #pragma omp parallel
     {
-        unsigned int seed = time(NULL) ^ omp_get_thread_num();  // Unique seed for each thread
+        unsigned int seed = omp_get_thread_num();  // Unique seed for each thread
         
         #pragma omp for
         for (int i = 0; i < POP_SIZE; i++) {
@@ -224,7 +224,7 @@ void crossover(Individual parent1, Individual parent2, Individual *child1, Indiv
 void mutate(Individual *individual) {
     #pragma omp parallel
     {
-        unsigned int seed = time(NULL) ^ omp_get_thread_num();  // Unique seed for each thread
+        unsigned int seed = omp_get_thread_num();  // Unique seed for each thread
         #pragma omp for
         for (int i = 0; i < ITEMS_NUM; i++) {
             // Generate a random number for mutation decision
