@@ -2,11 +2,11 @@
 #include <stdlib.h>
 #include <time.h>
 
-int POP_SIZE = 1000;
+int POP_SIZE;
 int ITEMS_NUM;// Number of items
 int GENERATIONS;
-float MUTATION_RATE = 0.05;
-float CROSSOVER_RATE = 0.7;
+float MUTATION_RATE;
+float CROSSOVER_RATE;
 int KNAPSACK_CAPACITY;
 
 typedef struct {
@@ -30,10 +30,9 @@ int get_total_value(Individual individual);
 int main(int argc, char** argv) {
     clock_t start_time = clock();
     srand(1);
+    input(argv[1]);
     Individual population[POP_SIZE], new_population[POP_SIZE];
     int generation = 0;
-
-    input(argv[1]);
 
     initialize_population(population);
     evaluate_population(population);
@@ -83,6 +82,9 @@ void input(const char* filename) {
     fscanf(file, "%d", &KNAPSACK_CAPACITY);
     fscanf(file, "%d", &ITEMS_NUM);
     fscanf(file, "%d", &GENERATIONS);
+    fscanf(file, "%d", &POP_SIZE);
+    fscanf(file, "%f", &MUTATION_RATE);
+    fscanf(file, "%f", &CROSSOVER_RATE);
 
     weights = (int*)malloc(ITEMS_NUM * sizeof(int));
     values = (int*)malloc(ITEMS_NUM * sizeof(int));
