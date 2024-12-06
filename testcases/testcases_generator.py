@@ -6,6 +6,9 @@ ITEMS_NUM = 300
 GENERATIONS = 1000
 MAX_WEIGHT = 50
 MAX_VALUE = 100
+POP_SIZE = 1000
+MUTATION_RATE = 0.05
+CROSSOVER_RATE = 0.7
 FILENAME = f"n{ITEMS_NUM}.txt"
 
 def generate_knapsack_testcase(filename=FILENAME, max_capacity=KNAPSACK_CAPACITY, max_items=ITEMS_NUM, max_weight=MAX_WEIGHT, max_value=MAX_VALUE, generations = GENERATIONS):
@@ -22,6 +25,9 @@ def generate_knapsack_testcase(filename=FILENAME, max_capacity=KNAPSACK_CAPACITY
         f.write(f"{capacity}\n")  
         f.write(f"{num_items}\n")  
         f.write(f"{generations}\n")
+        f.write(f"{POP_SIZE}\n")
+        f.write(f"{MUTATION_RATE}\n")
+        f.write(f"{CROSSOVER_RATE}\n")
         for weight, value in items:
             f.write(f"{weight} {value}\n") 
 
