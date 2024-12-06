@@ -61,7 +61,11 @@ int main(int argc, char** argv) {
     // Timer ends
     clock_t end_time = clock();
     double elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
-
+    if(population[best_index].fitness ==0){
+        printf("No solution found\n");
+        printf("Execution time: %.2f seconds\n", elapsed_time);
+        return 0;
+    }
     printf("Best solution found in generation %d with fitness %d:\n", GENERATIONS, best_fitness);
     printf("Items included (binary): ");
     for (int i = 0; i < ITEMS_NUM; i++) {
