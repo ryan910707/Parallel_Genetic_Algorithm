@@ -1,11 +1,12 @@
 import random
 
-FILENAME = "n10.txt"
-KNAPSACK_CAPACITY = 120
-ITEMS_NUM = 10
+
+KNAPSACK_CAPACITY = 560
+ITEMS_NUM = 300
 GENERATIONS = 1000
 MAX_WEIGHT = 50
 MAX_VALUE = 100
+FILENAME = f"n{ITEMS_NUM}.txt"
 
 def generate_knapsack_testcase(filename=FILENAME, max_capacity=KNAPSACK_CAPACITY, max_items=ITEMS_NUM, max_weight=MAX_WEIGHT, max_value=MAX_VALUE, generations = GENERATIONS):
     capacity = max_capacity
