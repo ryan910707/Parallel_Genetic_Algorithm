@@ -4,6 +4,7 @@
 #include <curand.h>
 #include <curand_kernel.h>
 #include <time.h>
+#include <omp.h>
 
 // CUDA error checking macro
 #define CUDA_CHECK(call) \
@@ -14,6 +15,17 @@ do { \
                 cudaGetErrorString(err)); \
         exit(EXIT_FAILURE); \
     } \
+} while(0)
+
+#define TIME_CHECK(call) \
+do { \
+    struct timeval start_time, end_time; \
+    gettimeofday(&start_time, NULL); \
+    call; \
+    gettimeofday(&end_time, NULL); \
+    double elapsed_time = (end_time.tv_sec - start_time.tv_sec) + \
+                          (end_time.tv_usec - start_time.tv_usec) / 1000000.0; \
+    printf("Elapsed time: %.6f seconds\n", elapsed_time); \
 } while(0)
 
 int threads_per_block = 1024;
@@ -191,7 +203,6 @@ int main(int argc, char** argv) {
     CUDA_CHECK(cudaMemcpyAsync(d_weights, h_weights, ITEMS_NUM * sizeof(int), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpyAsync(d_values, h_values, ITEMS_NUM * sizeof(int), cudaMemcpyHostToDevice));
 
-    int seed = 0;
     // Setup random states
     setup_random_states<<<blocks_for_genes, threads_per_block>>>(d_rand_states, 0);
 
@@ -248,7 +259,7 @@ int main(int argc, char** argv) {
     int best_fitness = h_fitness[0];
     int best_index = 0;
 
-    // TODO: use omp?
+    //omp is slower
     for (int i = 1; i < POP_SIZE; i++) {
         if (h_fitness[i] > best_fitness) {
             best_fitness = h_fitness[i];
@@ -281,12 +292,14 @@ int main(int argc, char** argv) {
 
         // Calculate total weight and value for the best solution
         int total_weight = 0, total_value = 0;
+        //omp is slower
         for (int i = 0; i < ITEMS_NUM; i++) {
             if (h_best_genes[i] == 1) {
                 total_weight += h_weights[i];
                 total_value += h_values[i];
             }
         }
+
         printf("Total weight: %d, Total value: %d\n", total_weight, total_value);
         printf("Capacity: %d\n", KNAPSACK_CAPACITY);
     }
