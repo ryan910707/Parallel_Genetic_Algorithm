@@ -58,10 +58,8 @@ __global__ void evaluate_population(int *genes, int *fitness, int *weights, int 
         int total_value = 0;
         
         for (int j = 0; j < items_num; j++) {
-            if (genes[tid * items_num + j] == 1) {
-                total_weight += weights[j];
-                total_value += values[j];
-            }
+            total_weight += weights[j]*genes[tid * items_num + j];
+            total_value += values[j]*genes[tid * items_num + j];
         }
         
         fitness[tid] = (total_weight > knapsack_capacity) ? 0 : total_value;
