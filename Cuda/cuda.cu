@@ -57,12 +57,15 @@ __global__ void evaluate_population(int *genes, int *fitness, int *weights, int 
         int total_weight = 0;
         int total_value = 0;
         
+        //this loop can be parallelized by reduction (n -> lg(n)), not easy
+        #pragma unroll
         for (int j = 0; j < items_num; j++) {
+            // if genes[] is 1, add weight and value, if 0 skip (use this to avoid branch)
             total_weight += weights[j]*genes[tid * items_num + j];
             total_value += values[j]*genes[tid * items_num + j];
         }
         
-        fitness[tid] = (total_weight > knapsack_capacity) ? 0 : total_value;
+        fitness[tid] = total_value * (total_weight <= knapsack_capacity);
     }
 }
 
@@ -81,7 +84,8 @@ __global__ void selection(int *old_genes, int *new_genes, int *fitness,
                                 &old_genes[parent1 * items_num] : 
                                 &old_genes[parent2 * items_num];
         
-        // Copy selected parent's genes
+        // Copy selected parent's genes, since parent are selected randomly, can't parallel
+        #pragma unroll
         for (int j = 0; j < items_num; j++) {
             new_genes[tid * items_num + j] = selected_parent[j];
         }
@@ -109,6 +113,7 @@ __global__ void crossover(int *genes, curandState *states, int pop_size,
                 int *child2 = parent2;
                 
                 // Swap genes after crossover point
+                #pragma unroll 
                 for (int i = crossover_point; i < items_num; i++) {
                     int temp = child1[i];
                     child1[i] = child2[i];
@@ -125,15 +130,12 @@ __global__ void crossover(int *genes, curandState *states, int pop_size,
 __global__ void mutate(int *genes, curandState *states, int pop_size, 
                        int items_num, float mutation_rate) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid < pop_size * items_num) {
-        int pop_idx = tid / items_num;
-        int item_idx = tid % items_num;
-        
+    if (tid < pop_size * items_num) {   
         curandState localState = states[tid];
         
-        if (curand_uniform(&localState) < mutation_rate) {
-            genes[tid] = 1 - genes[tid];  // Flip the gene
-        }
+        float rand_val = curand_uniform(&localState);
+        // flip genes bit 
+        genes[tid] ^= (rand_val < mutation_rate);
         
         states[tid] = localState;
     }
@@ -245,6 +247,8 @@ int main(int argc, char** argv) {
     // Find best solution
     int best_fitness = h_fitness[0];
     int best_index = 0;
+
+    // TODO: use omp?
     for (int i = 1; i < POP_SIZE; i++) {
         if (h_fitness[i] > best_fitness) {
             best_fitness = h_fitness[i];
