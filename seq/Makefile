@@ -1,6 +1,6 @@
 CC = gcc
 CXX = g++
-CXXFLAGS = -O3 -march=native -lm
+CXXFLAGS = -Ofast -march=native -lm
 CFLAGS = -O3 -lm
 TARGETS = seq
 
