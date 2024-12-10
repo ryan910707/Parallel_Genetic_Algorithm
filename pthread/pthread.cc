@@ -3,18 +3,19 @@
 #include <pthread.h>
 #include <time.h>
 
-#define POP_SIZE 100
+int POP_SIZE;
 int ITEMS_NUM;// Number of items
 int GENERATIONS;
-int MUTATION_RATE = 0.05;
-int CROSSOVER_RATE = 0.7;
+int MUTATION_RATE;
+int CROSSOVER_RATE;
 int KNAPSACK_CAPACITY;
 
 typedef struct {
     int *genes;  // Binary representation of the knapsack selection
     int fitness;
 } Individual;
-Individual population[POP_SIZE], new_population[POP_SIZE];
+Individual *population, *new_population;
+
 
 int *weights;  // Weights of the items
 int *values;
@@ -33,15 +34,35 @@ void mutate(Individual *individual);
 int get_total_weight(Individual individual);
 int get_total_value(Individual individual);
 
+double get_elapsed_time(struct timespec start, struct timespec end) {
+    struct timespec temp;
+    if ((end.tv_nsec - start.tv_nsec) < 0) {
+        temp.tv_sec = end.tv_sec - start.tv_sec - 1;
+        temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
+    } else {
+        temp.tv_sec = end.tv_sec - start.tv_sec;
+        temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+    }
+    return temp.tv_sec + (double) temp.tv_nsec / 1000000000;
+}
+
 int main(int argc, char** argv) {
+    struct timespec start_time, end_time;
+
+    // Start time
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
     // set cpu_cnt
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
     cpu_cnt = CPU_COUNT(&cpu_set);
 
-    srand(1);
+    printf("core: %d\n", cpu_cnt);
 
     input(argv[1]);
+
+    population = (Individual *) malloc(sizeof(Individual) * POP_SIZE);
+    new_population = (Individual *) malloc(sizeof(Individual) * POP_SIZE);
 
     initialize_population(population);
     evaluate_population(population);
@@ -67,8 +88,11 @@ int main(int argc, char** argv) {
             best_index = i;
         }
     }
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
+    double elapsed_time = get_elapsed_time(start_time, end_time);
 
     printf("Best solution found in generation %d with fitness %d:\n", GENERATIONS, best_fitness);
+
     printf("Items included (binary): ");
     for (int i = 0; i < ITEMS_NUM; i++) {
         printf("%d ", population[best_index].genes[i]);
@@ -77,6 +101,8 @@ int main(int argc, char** argv) {
 
     printf("Total weight: %d, Total value: %d\n", get_total_weight(population[best_index]), get_total_value(population[best_index]));
 
+    printf("Execution time: %.2f seconds\n", elapsed_time);
+
     return 0;
 }
 
@@ -84,21 +110,45 @@ void* cal(void* thread_id) {
     int generation = 0;
     int tid = *(int*)thread_id;
     int total_value, total_weight, parent1, parent2;
+    unsigned int local_seed = tid;
 
     while (generation < GENERATIONS){
         // selection
         for (int i = tid; i < POP_SIZE; i += cpu_cnt) {
-            parent1 = rand() % POP_SIZE;
-            parent2 = rand() % POP_SIZE;
+            parent1 = rand_r(&local_seed)  % POP_SIZE;
+            parent2 = rand_r(&local_seed)  % POP_SIZE;
             new_population[i] = population[parent1].fitness > population[parent2].fitness ? population[parent1] : population[parent2];
         }
         pthread_barrier_wait(&barrier);
 
         // crossover, mutate, mutate
         for (int i = tid*2; i < POP_SIZE; i += cpu_cnt*2) {
-            crossover(new_population[i], new_population[i + 1], &population[i], &population[i + 1]);
-            mutate(&population[i]);
-            mutate(&population[i + 1]);
+            // crossover
+            if ((rand_r(&local_seed)  / (float)RAND_MAX) < CROSSOVER_RATE) {
+                int crossover_point = rand_r(&local_seed)  % ITEMS_NUM;
+                for (int j = 0; j < crossover_point; j++) {
+                    population[i].genes[j] = new_population[i].genes[j];
+                    population[i+1].genes[j] = new_population[i+1].genes[j];
+                }
+                for (int j = crossover_point; j < ITEMS_NUM; j++) {
+                    population[i].genes[j] = new_population[i+1].genes[j];
+                    population[i+1].genes[j] = new_population[i].genes[j];
+                }
+            } else {
+                population[i] = new_population[i];
+                population[i+1] = new_population[i+1];
+            }
+
+            for (int i = 0; i < ITEMS_NUM; i++) {
+                if ((rand_r(&local_seed) / (float)RAND_MAX) < MUTATION_RATE) {
+                    population[i].genes[i] = 1 - population[i].genes[i];  // Flip the gene (0 to 1, or 1 to 0)
+                }
+            }
+            for (int i = 0; i < ITEMS_NUM; i++) {
+                if ((rand_r(&local_seed)  / (float)RAND_MAX) < MUTATION_RATE) {
+                    population[i+1].genes[i] = 1 - population[i+1].genes[i];  // Flip the gene (0 to 1, or 1 to 0)
+                }
+            }
         }
         pthread_barrier_wait(&barrier);
         
@@ -120,6 +170,9 @@ void input(const char* filename) {
     fscanf(file, "%d", &KNAPSACK_CAPACITY);
     fscanf(file, "%d", &ITEMS_NUM);
     fscanf(file, "%d", &GENERATIONS);
+    fscanf(file, "%d", &POP_SIZE);
+    fscanf(file, "%f", &MUTATION_RATE);
+    fscanf(file, "%f", &CROSSOVER_RATE);
 
 
     weights = (int*)malloc(ITEMS_NUM * sizeof(int));
