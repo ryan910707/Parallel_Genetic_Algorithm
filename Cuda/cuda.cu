@@ -177,13 +177,26 @@ void input(const char* filename) {
     fclose(file);
 }
 
+double get_elapsed_time(struct timespec start, struct timespec end) {
+    struct timespec temp;
+    if ((end.tv_nsec - start.tv_nsec) < 0) {
+        temp.tv_sec = end.tv_sec - start.tv_sec - 1;
+        temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
+    } else {
+        temp.tv_sec = end.tv_sec - start.tv_sec;
+        temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+    }
+    return temp.tv_sec + (double) temp.tv_nsec / 1000000000;
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
         return 1;
     }
 
-    clock_t start_time = clock();
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
     
     // Read input
     input(argv[1]);
@@ -275,8 +288,8 @@ int main(int argc, char** argv) {
                cudaMemcpyDeviceToHost));
 
     // Timer ends
-    clock_t end_time = clock();
-    double elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
+    double elapsed_time = get_elapsed_time(start_time, end_time);
 
     // Print results
     if (best_fitness == 0) {
