@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
     cpu_cnt = CPU_COUNT(&cpu_set);
 
-    printf("core: %d\n", cpu_cnt);
+    // printf("core: %d\n", cpu_cnt);
 
     input(argv[1]);
 
@@ -118,7 +118,19 @@ void* cal(void* thread_id) {
         for (int i = tid; i < POP_SIZE; i += cpu_cnt) {
             parent1 = rand_r(&local_seed)  % POP_SIZE;
             parent2 = rand_r(&local_seed)  % POP_SIZE;
-            new_population[i] = population[parent1].fitness > population[parent2].fitness ? population[parent1] : population[parent2];
+            // Select the better parent
+            Individual selected = (population[parent1].fitness > population[parent2].fitness) ? population[parent1] : population[parent2];
+            
+            // Allocate memory for the new individual's genes
+            new_population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
+            
+            // Copy the genes from the selected parent to the new individual
+            for (int j = 0; j < ITEMS_NUM; j++) {
+                new_population[i].genes[j] = selected.genes[j];
+            }
+            
+            // Copy the fitness value
+            new_population[i].fitness = selected.fitness;
         }
         pthread_barrier_wait(&barrier);
 
@@ -155,9 +167,7 @@ void* cal(void* thread_id) {
         
         // evaluate population
         for (int i = tid; i < POP_SIZE; i += cpu_cnt) {
-            total_value = get_total_value(population[i]);
-            total_weight = get_total_weight(population[i]);
-            population[i].fitness = (total_weight > KNAPSACK_CAPACITY) ? 0 : total_value;
+            population[i].fitness = calculate_fitness(population[i]);
         }
 
         generation++;
