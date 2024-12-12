@@ -100,6 +100,7 @@ int main(int argc, char** argv) {
     printf("\n");
 
     printf("Total weight: %d, Total value: %d\n", get_total_weight(population[best_index]), get_total_value(population[best_index]));
+    printf("Capacity: %d\n", KNAPSACK_CAPACITY);
 
     printf("Execution time: %.2f seconds\n", elapsed_time);
 
