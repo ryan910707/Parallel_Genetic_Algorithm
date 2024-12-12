@@ -27,8 +27,23 @@ void mutate(Individual *individual);
 int get_total_weight(Individual individual);
 int get_total_value(Individual individual);
 
+double get_elapsed_time(struct timespec start, struct timespec end) {
+    struct timespec temp;
+    if ((end.tv_nsec - start.tv_nsec) < 0) {
+        temp.tv_sec = end.tv_sec - start.tv_sec - 1;
+        temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
+    } else {
+        temp.tv_sec = end.tv_sec - start.tv_sec;
+        temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+    }
+    return temp.tv_sec + (double) temp.tv_nsec / 1000000000;
+}
+
+
 int main(int argc, char** argv) {
-    clock_t start_time = clock();
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+    
     srand(1);
     input(argv[1]);
     Individual population[POP_SIZE], new_population[POP_SIZE];
@@ -59,9 +74,10 @@ int main(int argc, char** argv) {
     }
 
     // Timer ends
-    clock_t end_time = clock();
-    double elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
-    if(population[best_index].fitness ==0){
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
+    double elapsed_time = get_elapsed_time(start_time, end_time);
+
+    if(population[best_index].fitness == 0){
         printf("No solution found\n");
         printf("Execution time: %.2f seconds\n", elapsed_time);
         return 0;
