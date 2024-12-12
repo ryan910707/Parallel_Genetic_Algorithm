@@ -27,7 +27,7 @@ void initialize_population(Individual population[]);
 void evaluate_population(Individual population[]);
 int calculate_fitness(Individual individual);
 void crossover_array(int *genes1, int *genes2, int *newgenes1, int *newgenes2);
-void mutate_array(int *genes, int num_genes);
+void mutate_array(int *genes);
 int get_total_weight(Individual individual);
 int get_total_value(Individual individual);
 void selection(Individual population[], Individual new_population[]);
@@ -105,8 +105,8 @@ int main(int argc, char** argv) {
 
             for (int i = 0; i < local_size; i += 2) {
                 crossover_array(local_genes + i * ITEMS_NUM, local_genes + (i + 1) * ITEMS_NUM, local_new_genes + i * ITEMS_NUM, local_new_genes + (i + 1) * ITEMS_NUM);
-                mutate_array(local_new_genes + i * ITEMS_NUM, ITEMS_NUM);
-                mutate_array(local_new_genes + (i + 1) * ITEMS_NUM, ITEMS_NUM);
+                mutate_array(local_new_genes + i * ITEMS_NUM);
+                mutate_array(local_new_genes + (i + 1) * ITEMS_NUM);
             }
 
             MPI_Gatherv(local_new_genes, local_size * ITEMS_NUM, MPI_INT,
@@ -125,8 +125,8 @@ int main(int argc, char** argv) {
 
             for (int i = 0; i < local_size; i += 2) {
                 crossover_array(local_genes + i * ITEMS_NUM, local_genes + (i + 1) * ITEMS_NUM, local_new_genes + i * ITEMS_NUM, local_new_genes + (i + 1) * ITEMS_NUM);
-                mutate_array(local_new_genes + i * ITEMS_NUM, ITEMS_NUM);
-                mutate_array(local_new_genes + (i + 1) * ITEMS_NUM, ITEMS_NUM);
+                mutate_array(local_new_genes + i * ITEMS_NUM);
+                mutate_array(local_new_genes + (i + 1) * ITEMS_NUM);
             }
 
             MPI_Gatherv(local_new_genes, local_size * ITEMS_NUM, MPI_INT,
@@ -166,15 +166,15 @@ int main(int argc, char** argv) {
 
             printf("Execution time: %.2f seconds\n", elapsed_time);
 
-            free(population);
+            // free(population);
         }
 
-    if (mpi_rank == 0) {
-        free(global_genes);
-    }
-    free(local_genes);
-    free(recv_counts);
-    free(displacements);
+    // if (mpi_rank == 0) {
+    //     free(global_genes);
+    // }
+    // free(local_genes);
+    // free(recv_counts);
+    // free(displacements);
 
     MPI_Finalize();
     return 0;
@@ -217,13 +217,20 @@ void evaluate_population(Individual population[]) {
 int calculate_fitness(Individual individual) {
     int total_value = get_total_value(individual);
     int total_weight = get_total_weight(individual);
-    return (total_weight > KNAPSACK_CAPACITY) ? 0 : total_value;
+
+    // If the weight exceeds the capacity, the fitness is 0 (invalid solution)
+    if (total_weight > KNAPSACK_CAPACITY) {
+        return 0;
+    }
+    return total_value;  // Maximizing the value
 }
 
 int get_total_weight(Individual individual) {
     int total_weight = 0;
     for (int i = 0; i < ITEMS_NUM; i++) {
-        total_weight += individual.genes[i] * weights[i];
+        if (individual.genes[i] == 1) {
+            total_weight += weights[i];
+        }
     }
     return total_weight;
 }
@@ -231,7 +238,9 @@ int get_total_weight(Individual individual) {
 int get_total_value(Individual individual) {
     int total_value = 0;
     for (int i = 0; i < ITEMS_NUM; i++) {
-        total_value += individual.genes[i] * values[i];
+        if (individual.genes[i] == 1) {
+            total_value += values[i];
+        }
     }
     return total_value;
 }
@@ -278,8 +287,8 @@ void crossover_array(int *genes1, int *genes2, int *newgenes1, int *newgenes2) {
     }
 }
 
-void mutate_array(int *genes, int num_genes) {
-    for (int i = 0; i < num_genes; i++) {
+void mutate_array(int *genes) {
+    for (int i = 0; i < ITEMS_NUM; i++) {
         if ((rand() / (float)RAND_MAX) < MUTATION_RATE) {
             genes[i] = 1 - genes[i];
         }
