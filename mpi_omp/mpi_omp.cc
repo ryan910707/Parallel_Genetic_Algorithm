@@ -2,33 +2,35 @@
 #include <stdlib.h>
 #include <time.h>
 #include <omp.h>
-#include <climits>
 #include <mpi.h>
+#include <math.h>
+#include <cstring>
+#include <limits.h>
 
 int POP_SIZE;
-int ITEMS_NUM;  // Number of items
+int ITEMS_NUM;
 int GENERATIONS;
 float MUTATION_RATE;
 float CROSSOVER_RATE;
 int KNAPSACK_CAPACITY;
 
+int *weights;
+int *values;
+
 typedef struct {
-    int *genes;  // Binary representation of the knapsack selection
+    int *genes;
     int fitness;
 } Individual;
-
-int *weights;  // Weights of the items
-int *values;
 
 void input(const char* filename);
 void initialize_population(Individual population[]);
 void evaluate_population(Individual population[]);
 int calculate_fitness(Individual individual);
-void selection(Individual population[], Individual new_population[]);
-void crossover(Individual parent1, Individual parent2, Individual *child1, Individual *child2);
-void mutate(Individual *individual);
+void crossover_array(int *genes1, int *genes2, int *newgenes1, int *newgenes2);
+void mutate_array(int *genes);
 int get_total_weight(Individual individual);
 int get_total_value(Individual individual);
+void selection(Individual population[], Individual new_population[]);
 
 double get_elapsed_time(struct timespec start, struct timespec end) {
     struct timespec temp;
@@ -43,64 +45,98 @@ double get_elapsed_time(struct timespec start, struct timespec end) {
 }
 
 int main(int argc, char** argv) {
-    MPI_Init(&argc, &argv);
-
     struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+    MPI_Init(&argc, &argv);
 
     int mpi_rank, mpi_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
 
-    // calculate the number of elements on each process
-    int base_size = floor(POP_SIZE / mpi_size);
-    int remainder = POP_SIZE % mpi_size;
-    int local_size = base_size + (mpi_rank < remainder ? 1 : 0);
-    int *recv_counts =  new int[mpi_size];
-    int *displacements = new int[mpi_size];
-    
-    // calculate displacements and recvcounts for all processes
-    for (int i = 0; i < mpi_size; i++) {
-        recv_counts[i] = base_size + (i < remainder ? 1 : 0);
-        displacements[i] = i * base_size + std::min(i, remainder);
+    if (mpi_rank == 0) {
+        input(argv[1]);
     }
 
-    input(argv[1]);
-    if (mpi_rank == 0) { // master process
-        // Start time
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
+    // Broadcast global parameters
+    MPI_Bcast(&KNAPSACK_CAPACITY, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&ITEMS_NUM, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&GENERATIONS, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&POP_SIZE, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&MUTATION_RATE, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&CROSSOVER_RATE, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-        Individual population[POP_SIZE], new_population[POP_SIZE];
+    int base_size = 2 * floor(POP_SIZE / (2 * mpi_size));
+    int remainder = POP_SIZE - base_size * mpi_size;
+    int local_size = base_size + (mpi_rank < (remainder / 2) ? 2 : 0);
+
+    int *recv_counts = (int *)malloc(mpi_size * sizeof(int));
+    int *displacements = (int *)malloc(mpi_size * sizeof(int));
+    int offset = 0;
+
+    for (int i = 0; i < mpi_size; i++) {
+        recv_counts[i] = (base_size + (i < (remainder / 2) ? 2 : 0)) * ITEMS_NUM;
+        displacements[i] = offset;
+        offset += recv_counts[i];
+    }
+
+    int *global_genes = NULL;
+    int *local_genes = (int *)malloc(local_size * ITEMS_NUM * sizeof(int));
+    int *local_new_genes = (int *)malloc(local_size * ITEMS_NUM * sizeof(int));
+
+    Individual *population = (Individual *)malloc(POP_SIZE * sizeof(Individual));
+    Individual *new_population = (Individual *)malloc(POP_SIZE * sizeof(Individual));
+    if (mpi_rank == 0) { // master process
+        global_genes = (int *)malloc(POP_SIZE * ITEMS_NUM * sizeof(int));
 
         initialize_population(population);
         evaluate_population(population);
 
+
+
         for (int generation = 0; generation < GENERATIONS; generation++) {
-            // Selection step: can be done on all processes independently
             selection(population, new_population);
-
-            // Scatter the population across all processes
-            MPI_Scatterv(new_population, recv_counts, displacements, MPI_BYTE, 
-                        population, local_size * sizeof(Individual), MPI_BYTE, 
-                        0, MPI_COMM_WORLD);
-
-            // Perform crossover and mutation on the local chunk of the population
-            for (int i = 0; i < local_size; i += 2) {
-                crossover(population[i], population[i + 1], &new_population[i], &new_population[i + 1]);
-                mutate(&new_population[i]);
-                mutate(&new_population[i + 1]);
+            for (int i = 0; i < POP_SIZE; i++) {
+                memcpy(global_genes + i * ITEMS_NUM, new_population[i].genes, ITEMS_NUM * sizeof(int));
             }
 
-            // Gather the new population back to the root process
-            MPI_Gatherv(new_population, local_size * sizeof(Individual), MPI_BYTE, 
-                        population, recv_counts, displacements, MPI_BYTE, 
-                        0, MPI_COMM_WORLD);
+            MPI_Scatterv(global_genes, recv_counts, displacements, MPI_INT,
+                        local_genes, local_size * ITEMS_NUM, MPI_INT, 0, MPI_COMM_WORLD);
 
-            // Evaluate the population on all processes
+            for (int i = 0; i < local_size; i += 2) {
+                crossover_array(local_genes + i * ITEMS_NUM, local_genes + (i + 1) * ITEMS_NUM, local_new_genes + i * ITEMS_NUM, local_new_genes + (i + 1) * ITEMS_NUM);
+                mutate_array(local_new_genes + i * ITEMS_NUM);
+                mutate_array(local_new_genes + (i + 1) * ITEMS_NUM);
+            }
+
+            MPI_Gatherv(local_new_genes, local_size * ITEMS_NUM, MPI_INT,
+                        global_genes, recv_counts, displacements, MPI_INT, 0, MPI_COMM_WORLD);
+
+            for (int i = 0; i < POP_SIZE; i++) {
+                population[i].genes = global_genes + i * ITEMS_NUM;
+            }
             evaluate_population(population);
         }
+    }
+    else { // slave process
+        for (int generation = 0; generation < GENERATIONS; generation++) {
+            MPI_Scatterv(global_genes, recv_counts, displacements, MPI_INT,
+                        local_genes, local_size * ITEMS_NUM, MPI_INT, 0, MPI_COMM_WORLD);
 
-        // Output the best solution found
-        int best_fitness = population[0].fitness; // Or appropriate minimum value
+            for (int i = 0; i < local_size; i += 2) {
+                crossover_array(local_genes + i * ITEMS_NUM, local_genes + (i + 1) * ITEMS_NUM, local_new_genes + i * ITEMS_NUM, local_new_genes + (i + 1) * ITEMS_NUM);
+                mutate_array(local_new_genes + i * ITEMS_NUM);
+                mutate_array(local_new_genes + (i + 1) * ITEMS_NUM);
+            }
+
+            MPI_Gatherv(local_new_genes, local_size * ITEMS_NUM, MPI_INT,
+                        global_genes, recv_counts, displacements, MPI_INT, 0, MPI_COMM_WORLD);
+        }
+    }
+
+
+    if (mpi_rank == 0) {
+        int best_fitness = INT_MIN; // Or appropriate minimum value
         int best_index = -1;
         #pragma omp parallel
         {
@@ -126,7 +162,6 @@ int main(int argc, char** argv) {
             }
         }
 
-        // End time
         clock_gettime(CLOCK_MONOTONIC, &end_time);
         double elapsed_time = get_elapsed_time(start_time, end_time);
 
@@ -147,27 +182,16 @@ int main(int argc, char** argv) {
         printf("Capacity: %d\n", KNAPSACK_CAPACITY);
 
         printf("Execution time: %.2f seconds\n", elapsed_time);
-    }
-    else { // slave process
-        for (int generation = 0; generation < GENERATIONS; generation++) {
-            // Scatter the population across all processes
-            MPI_Scatterv(new_population, recv_counts, displacements, MPI_BYTE, 
-                        population, local_size * sizeof(Individual), MPI_BYTE, 
-                        0, MPI_COMM_WORLD);
 
-            // Perform crossover and mutation on the local chunk of the population
-            for (int i = 0; i < local_size; i += 2) {
-                crossover(population[i], population[i + 1], &new_population[i], &new_population[i + 1]);
-                mutate(&new_population[i]);
-                mutate(&new_population[i + 1]);
-            }
-
-            // Gather the new population back to the root process
-            MPI_Gatherv(new_population, local_size * sizeof(Individual), MPI_BYTE, 
-                        population, recv_counts, displacements, MPI_BYTE, 
-                        0, MPI_COMM_WORLD);
-        }
+        // free(population);
     }
+
+    // if (mpi_rank == 0) {
+    //     free(global_genes);
+    // }
+    // free(local_genes);
+    // free(recv_counts);
+    // free(displacements);
 
     MPI_Finalize();
     return 0;
@@ -182,12 +206,14 @@ void input(const char* filename) {
     fscanf(file, "%f", &MUTATION_RATE);
     fscanf(file, "%f", &CROSSOVER_RATE);
 
-    weights = (int*)malloc(ITEMS_NUM * sizeof(int));
-    values = (int*)malloc(ITEMS_NUM * sizeof(int));
+    weights = (int *)malloc(ITEMS_NUM * sizeof(int));
+    values = (int *)malloc(ITEMS_NUM * sizeof(int));
 
     for (int i = 0; i < ITEMS_NUM; i++) {
         fscanf(file, "%d %d", &weights[i], &values[i]);
     }
+
+    fclose(file);
 }
 
 void initialize_population(Individual population[]) {
@@ -197,10 +223,9 @@ void initialize_population(Individual population[]) {
 
         #pragma omp for
         for (int i = 0; i < POP_SIZE; i++) {
-            population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
-            
+            population[i].genes = (int *)malloc(ITEMS_NUM * sizeof(int));
             for (int j = 0; j < ITEMS_NUM; j++) {
-                population[i].genes[j] = rand_r(&seed) % 2;  // Random 0 or 1 using thread-safe rand_r
+                population[i].genes[j] = rand() % 2;
             }
         }
     }
@@ -216,7 +241,7 @@ void evaluate_population(Individual population[]) {
 int calculate_fitness(Individual individual) {
     int total_value = get_total_value(individual);
     int total_weight = get_total_weight(individual);
-    
+
     // If the weight exceeds the capacity, the fitness is 0 (invalid solution)
     if (total_weight > KNAPSACK_CAPACITY) {
         return 0;
@@ -247,13 +272,13 @@ int get_total_value(Individual individual) {
 void selection(Individual population[], Individual new_population[]) {
     #pragma omp parallel
     {
-        unsigned int seed = omp_get_thread_num();  // Unique seed for each thread
-        
+        unsigned int seed = omp_get_thread_num(); // Unique seed for each thread
+
         #pragma omp for
         for (int i = 0; i < POP_SIZE; i++) {
             // Tournament selection: pick two random individuals and select the best one
-            int parent1 = rand_r(&seed) % POP_SIZE;
-            int parent2 = rand_r(&seed) % POP_SIZE;
+            int parent1 = rand() % POP_SIZE;
+            int parent2 = rand() % POP_SIZE;
             
             // Select the better parent
             Individual selected = (population[parent1].fitness > population[parent2].fitness) ? population[parent1] : population[parent2];
@@ -272,34 +297,34 @@ void selection(Individual population[], Individual new_population[]) {
     }
 }
 
-void crossover(Individual parent1, Individual parent2, Individual *child1, Individual *child2) {
+void crossover_array(int *genes1, int *genes2, int *newgenes1, int *newgenes2) {
     if ((rand() / (float)RAND_MAX) < CROSSOVER_RATE) {
         int crossover_point = rand() % ITEMS_NUM;
-        // #pragma omp parallel for // slower
         for (int i = 0; i < crossover_point; i++) {
-            child1->genes[i] = parent1.genes[i];
-            child2->genes[i] = parent2.genes[i];
+            newgenes1[i] = genes1[i];
+            newgenes2[i] = genes2[i];
         }
-        // #pragma omp parallel for // slower
         for (int i = crossover_point; i < ITEMS_NUM; i++) {
-            child1->genes[i] = parent2.genes[i];
-            child2->genes[i] = parent1.genes[i];
+            newgenes1[i] = genes2[i];
+            newgenes2[i] = genes1[i];
         }
-    } else {
-        *child1 = parent1;
-        *child2 = parent2;
+    }
+    else {
+        for (int i = 0; i < ITEMS_NUM; i++) {
+            newgenes1[i] = genes1[i];
+            newgenes2[i] = genes2[i];
+        }
     }
 }
 
-void mutate(Individual *individual) {
-    #pragma omp parallel
+void mutate_array(int *genes) {
+    #pragma omp parallel 
     {
         unsigned int seed = omp_get_thread_num();  // Unique seed for each thread
         #pragma omp for
         for (int i = 0; i < ITEMS_NUM; i++) {
-            // Generate a random number for mutation decision
             if ((rand_r(&seed) / (float)RAND_MAX) < MUTATION_RATE) {
-                individual->genes[i] = 1 - individual->genes[i];  // Flip the gene (0 to 1, or 1 to 0)
+                genes[i] = 1 - genes[i];
             }
         }
     }
