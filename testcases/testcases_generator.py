@@ -2,14 +2,14 @@ import random
 
 
 KNAPSACK_CAPACITY = 8000
-ITEMS_NUM = 500
+ITEMS_NUM = 1000
 GENERATIONS = 2000
 MAX_WEIGHT = 50
 MAX_VALUE = 100
-POP_SIZE = 2000
+POP_SIZE = 8000 #base 1000
 MUTATION_RATE = 0.05
 CROSSOVER_RATE = 0.7
-FILENAME = f"n{ITEMS_NUM}.txt"
+FILENAME = f"n{POP_SIZE}.txt"
 
 def generate_knapsack_testcase(filename=FILENAME, max_capacity=KNAPSACK_CAPACITY, max_items=ITEMS_NUM, max_weight=MAX_WEIGHT, max_value=MAX_VALUE, generations = GENERATIONS):
     capacity = max_capacity
