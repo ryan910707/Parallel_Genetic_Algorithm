@@ -113,6 +113,10 @@ void* cal(void* thread_id) {
     int total_value, total_weight, parent1, parent2;
     unsigned int local_seed = tid;
 
+    for (int i = tid; i < POP_SIZE; i+= cpu_cnt) {
+        new_population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
+    }
+
     while (generation < GENERATIONS){
         // selection
         for (int i = tid; i < POP_SIZE; i += cpu_cnt) {
@@ -122,7 +126,7 @@ void* cal(void* thread_id) {
             Individual selected = (population[parent1].fitness > population[parent2].fitness) ? population[parent1] : population[parent2];
             
             // Allocate memory for the new individual's genes
-            new_population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
+            // new_population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
             
             // Copy the genes from the selected parent to the new individual
             for (int j = 0; j < ITEMS_NUM; j++) {
