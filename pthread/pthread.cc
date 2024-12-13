@@ -152,22 +152,22 @@ void* cal(void* thread_id) {
                 population[i+1] = new_population[i+1];
             }
 
-            for (int i = 0; i < ITEMS_NUM; i++) {
+            for (int j = 0; j < ITEMS_NUM; ++j) {
                 if ((rand_r(&local_seed) / (float)RAND_MAX) < MUTATION_RATE) {
-                    population[i].genes[i] = 1 - population[i].genes[i];  // Flip the gene (0 to 1, or 1 to 0)
+                    population[i].genes[j] = 1 - population[i].genes[j];  // Flip the gene (0 to 1, or 1 to 0)
                 }
             }
-            for (int i = 0; i < ITEMS_NUM; i++) {
+            for (int j = 0; j < ITEMS_NUM; ++j) {
                 if ((rand_r(&local_seed)  / (float)RAND_MAX) < MUTATION_RATE) {
-                    population[i+1].genes[i] = 1 - population[i+1].genes[i];  // Flip the gene (0 to 1, or 1 to 0)
+                    population[i+1].genes[j] = 1 - population[i+1].genes[j];  // Flip the gene (0 to 1, or 1 to 0)
                 }
             }
         }
         pthread_barrier_wait(&barrier);
         
         // evaluate population
-        for (int i = tid; i < POP_SIZE; i += cpu_cnt) {
-            population[i].fitness = calculate_fitness(population[i]);
+        for (int j = tid; j < POP_SIZE; j += cpu_cnt) {
+            population[j].fitness = calculate_fitness(population[j]);
         }
 
         generation++;
