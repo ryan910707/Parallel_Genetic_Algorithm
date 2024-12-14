@@ -93,20 +93,73 @@ int main(int argc, char** argv) {
         evaluate_population(population);
 
 
+        int num_threads = omp_get_max_threads();
+
+        // Allocate memory for the new population genes
+        #pragma omp parallel for
+        for (int i = 0; i < POP_SIZE; i++) {
+            new_population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
+        }
 
         for (int generation = 0; generation < GENERATIONS; generation++) {
-            selection(population, new_population);
+            // Selection phase
+            #pragma omp parallel for
+            for (int i = 0; i < POP_SIZE; i++) {
+                unsigned int local_seed = omp_get_thread_num();
+                int parent1 = rand_r(&local_seed) % POP_SIZE;
+                int parent2 = rand_r(&local_seed) % POP_SIZE;
+                Individual selected = (population[parent1].fitness > population[parent2].fitness) ? population[parent1] : population[parent2];
+
+                for (int j = 0; j < ITEMS_NUM; j++) {
+                    new_population[i].genes[j] = selected.genes[j];
+                }
+                new_population[i].fitness = selected.fitness;
+            }
+
             for (int i = 0; i < POP_SIZE; i++) {
                 memcpy(global_genes + i * ITEMS_NUM, new_population[i].genes, ITEMS_NUM * sizeof(int));
             }
-
             MPI_Scatterv(global_genes, recv_counts, displacements, MPI_INT,
                         local_genes, local_size * ITEMS_NUM, MPI_INT, 0, MPI_COMM_WORLD);
 
+            #pragma omp parallel for
             for (int i = 0; i < local_size; i += 2) {
-                crossover_array(local_genes + i * ITEMS_NUM, local_genes + (i + 1) * ITEMS_NUM, local_new_genes + i * ITEMS_NUM, local_new_genes + (i + 1) * ITEMS_NUM);
-                mutate_array(local_new_genes + i * ITEMS_NUM);
-                mutate_array(local_new_genes + (i + 1) * ITEMS_NUM);
+                // crossover_array(local_genes + i * ITEMS_NUM, local_genes + (i + 1) * ITEMS_NUM, local_new_genes + i * ITEMS_NUM, local_new_genes + (i + 1) * ITEMS_NUM);
+                // mutate_array(local_new_genes + i * ITEMS_NUM);
+                // mutate_array(local_new_genes + (i + 1) * ITEMS_NUM);
+
+                // Crossover and mutation phase
+                int *genes1 = local_genes + i * ITEMS_NUM;
+                int *genes2 = local_genes + (i + 1) * ITEMS_NUM;
+                int *newgenes1 = local_new_genes + i * ITEMS_NUM;
+                int *newgenes2 = local_new_genes + (i + 1) * ITEMS_NUM;
+                unsigned int local_seed = omp_get_thread_num();
+                if ((rand_r(&local_seed) / (float)RAND_MAX) < CROSSOVER_RATE) {
+                    int crossover_point = rand_r(&local_seed) % ITEMS_NUM;
+                    for (int i = 0; i < crossover_point; i++) {
+                        newgenes1[i] = genes1[i];
+                        newgenes2[i] = genes2[i];
+                    }
+                    for (int i = crossover_point; i < ITEMS_NUM; i++) {
+                        newgenes1[i] = genes2[i];
+                        newgenes2[i] = genes1[i];
+                    }
+                } else {
+                    for (int i = 0; i < ITEMS_NUM; i++) {
+                        newgenes1[i] = genes1[i];
+                        newgenes2[i] = genes2[i];
+                    }
+                }
+
+                // Mutation
+                for (int j = 0; j < ITEMS_NUM; j++) {
+                    if ((rand_r(&local_seed) / (float)RAND_MAX) < MUTATION_RATE) {
+                        newgenes1[j] = 1 - newgenes1[j];
+                    }
+                    if ((rand_r(&local_seed) / (float)RAND_MAX) < MUTATION_RATE) {
+                        newgenes2[j] = 1 - newgenes2[j];;
+                    }
+                }
             }
 
             MPI_Gatherv(local_new_genes, local_size * ITEMS_NUM, MPI_INT,
@@ -115,7 +168,12 @@ int main(int argc, char** argv) {
             for (int i = 0; i < POP_SIZE; i++) {
                 population[i].genes = global_genes + i * ITEMS_NUM;
             }
-            evaluate_population(population);
+
+            // Evaluate population fitness
+            #pragma omp parallel for
+            for (int i = 0; i < POP_SIZE; i++) {
+                population[i].fitness = calculate_fitness(population[i]);
+            }
         }
     }
     else { // slave process
@@ -123,10 +181,40 @@ int main(int argc, char** argv) {
             MPI_Scatterv(global_genes, recv_counts, displacements, MPI_INT,
                         local_genes, local_size * ITEMS_NUM, MPI_INT, 0, MPI_COMM_WORLD);
 
+            #pragma omp parallel for
             for (int i = 0; i < local_size; i += 2) {
-                crossover_array(local_genes + i * ITEMS_NUM, local_genes + (i + 1) * ITEMS_NUM, local_new_genes + i * ITEMS_NUM, local_new_genes + (i + 1) * ITEMS_NUM);
-                mutate_array(local_new_genes + i * ITEMS_NUM);
-                mutate_array(local_new_genes + (i + 1) * ITEMS_NUM);
+                // Crossover and mutation phase
+                int *genes1 = local_genes + i * ITEMS_NUM;
+                int *genes2 = local_genes + (i + 1) * ITEMS_NUM;
+                int *newgenes1 = local_new_genes + i * ITEMS_NUM;
+                int *newgenes2 = local_new_genes + (i + 1) * ITEMS_NUM;
+                unsigned int local_seed = omp_get_thread_num();
+                if ((rand_r(&local_seed) / (float)RAND_MAX) < CROSSOVER_RATE) {
+                    int crossover_point = rand_r(&local_seed) % ITEMS_NUM;
+                    for (int i = 0; i < crossover_point; i++) {
+                        newgenes1[i] = genes1[i];
+                        newgenes2[i] = genes2[i];
+                    }
+                    for (int i = crossover_point; i < ITEMS_NUM; i++) {
+                        newgenes1[i] = genes2[i];
+                        newgenes2[i] = genes1[i];
+                    }
+                } else {
+                    for (int i = 0; i < ITEMS_NUM; i++) {
+                        newgenes1[i] = genes1[i];
+                        newgenes2[i] = genes2[i];
+                    }
+                }
+
+                // Mutation
+                for (int j = 0; j < ITEMS_NUM; j++) {
+                    if ((rand_r(&local_seed) / (float)RAND_MAX) < MUTATION_RATE) {
+                        newgenes1[j] = 1 - newgenes1[j];
+                    }
+                    if ((rand_r(&local_seed) / (float)RAND_MAX) < MUTATION_RATE) {
+                        newgenes2[j] = 1 - newgenes2[j];;
+                    }
+                }
             }
 
             MPI_Gatherv(local_new_genes, local_size * ITEMS_NUM, MPI_INT,
@@ -136,55 +224,40 @@ int main(int argc, char** argv) {
 
 
     if (mpi_rank == 0) {
-        int best_fitness = INT_MIN; // Or appropriate minimum value
-        int best_index = -1;
-        #pragma omp parallel
-        {
-            // Each thread maintains a local best
-            int local_best_fitness = INT_MIN;
-            int local_best_index = -1;
+            int best_fitness = INT_MIN;
+            int best_index = -1;
 
-            #pragma omp for
+            #pragma omp parallel for
             for (int i = 0; i < POP_SIZE; i++) {
-                if (population[i].fitness > local_best_fitness) {
-                    local_best_fitness = population[i].fitness;
-                    local_best_index = i;
+                if (population[i].fitness > best_fitness) {
+                    best_fitness = population[i].fitness;
+                    best_index = i;
                 }
             }
 
-            // Now update the global best in a thread-safe manner
-            #pragma omp critical
-            {
-                if (local_best_fitness > best_fitness) {
-                    best_fitness = local_best_fitness;
-                    best_index = local_best_index;
-                }
+            clock_gettime(CLOCK_MONOTONIC, &end_time);
+            double elapsed_time = get_elapsed_time(start_time, end_time);
+
+            if (population[best_index].fitness == 0) {
+                printf("No solution found\n");
+                printf("Execution time: %.2f seconds\n", elapsed_time);
+                return 0;
             }
-        }
 
-        clock_gettime(CLOCK_MONOTONIC, &end_time);
-        double elapsed_time = get_elapsed_time(start_time, end_time);
+            printf("Best solution found in generation %d with fitness %d:\n", GENERATIONS, best_fitness);
+            printf("Items included (binary): ");
+            for (int i = 0; i < ITEMS_NUM; i++) {
+                printf("%d ", population[best_index].genes[i]);
+            }
+            printf("\n");
 
-        if (population[best_index].fitness == 0) {
-            printf("No solution found\n");
+            printf("Total weight: %d, Total value: %d\n", get_total_weight(population[best_index]), get_total_value(population[best_index]));
+            printf("Capacity: %d\n", KNAPSACK_CAPACITY);
+
             printf("Execution time: %.2f seconds\n", elapsed_time);
-            return 0;
+
+            // free(population);
         }
-
-        printf("Best solution found in generation %d with fitness %d:\n", GENERATIONS, best_fitness);
-        printf("Items included (binary): ");
-        for (int i = 0; i < ITEMS_NUM; i++) {
-            printf("%d ", population[best_index].genes[i]);
-        }
-        printf("\n");
-
-        printf("Total weight: %d, Total value: %d\n", get_total_weight(population[best_index]), get_total_value(population[best_index]));
-        printf("Capacity: %d\n", KNAPSACK_CAPACITY);
-
-        printf("Execution time: %.2f seconds\n", elapsed_time);
-
-        // free(population);
-    }
 
     // if (mpi_rank == 0) {
     //     free(global_genes);
@@ -217,22 +290,16 @@ void input(const char* filename) {
 }
 
 void initialize_population(Individual population[]) {
-    #pragma omp parallel
-    {
-        unsigned int seed = omp_get_thread_num();  // Unique seed for each thread
-
-        #pragma omp for
-        for (int i = 0; i < POP_SIZE; i++) {
-            population[i].genes = (int *)malloc(ITEMS_NUM * sizeof(int));
-            for (int j = 0; j < ITEMS_NUM; j++) {
-                population[i].genes[j] = rand() % 2;
-            }
+    #pragma parallel for
+    for (int i = 0; i < POP_SIZE; i++) {
+        population[i].genes = (int *)malloc(ITEMS_NUM * sizeof(int));
+        for (int j = 0; j < ITEMS_NUM; j++) {
+            population[i].genes[j] = rand() % 2;
         }
     }
 }
 
 void evaluate_population(Individual population[]) {
-    #pragma omp parallel for
     for (int i = 0; i < POP_SIZE; i++) {
         population[i].fitness = calculate_fitness(population[i]);
     }
@@ -270,30 +337,24 @@ int get_total_value(Individual individual) {
 }
 
 void selection(Individual population[], Individual new_population[]) {
-    #pragma omp parallel
-    {
-        unsigned int seed = omp_get_thread_num(); // Unique seed for each thread
-
-        #pragma omp for
-        for (int i = 0; i < POP_SIZE; i++) {
-            // Tournament selection: pick two random individuals and select the best one
-            int parent1 = rand() % POP_SIZE;
-            int parent2 = rand() % POP_SIZE;
-            
-            // Select the better parent
-            Individual selected = (population[parent1].fitness > population[parent2].fitness) ? population[parent1] : population[parent2];
-            
-            // Allocate memory for the new individual's genes
-            new_population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
-            
-            // Copy the genes from the selected parent to the new individual
-            for (int j = 0; j < ITEMS_NUM; j++) {
-                new_population[i].genes[j] = selected.genes[j];
-            }
-            
-            // Copy the fitness value
-            new_population[i].fitness = selected.fitness;
+    for (int i = 0; i < POP_SIZE; i++) {
+        // Tournament selection: pick two random individuals and select the best one
+        int parent1 = rand() % POP_SIZE;
+        int parent2 = rand() % POP_SIZE;
+        
+        // Select the better parent
+        Individual selected = (population[parent1].fitness > population[parent2].fitness) ? population[parent1] : population[parent2];
+        
+        // Allocate memory for the new individual's genes
+        new_population[i].genes = (int*)malloc(sizeof(int) * ITEMS_NUM);
+        
+        // Copy the genes from the selected parent to the new individual
+        for (int j = 0; j < ITEMS_NUM; j++) {
+            new_population[i].genes[j] = selected.genes[j];
         }
+        
+        // Copy the fitness value
+        new_population[i].fitness = selected.fitness;
     }
 }
 
@@ -318,14 +379,9 @@ void crossover_array(int *genes1, int *genes2, int *newgenes1, int *newgenes2) {
 }
 
 void mutate_array(int *genes) {
-    #pragma omp parallel 
-    {
-        unsigned int seed = omp_get_thread_num();  // Unique seed for each thread
-        #pragma omp for
-        for (int i = 0; i < ITEMS_NUM; i++) {
-            if ((rand_r(&seed) / (float)RAND_MAX) < MUTATION_RATE) {
-                genes[i] = 1 - genes[i];
-            }
+    for (int i = 0; i < ITEMS_NUM; i++) {
+        if ((rand() / (float)RAND_MAX) < MUTATION_RATE) {
+            genes[i] = 1 - genes[i];
         }
     }
 }
