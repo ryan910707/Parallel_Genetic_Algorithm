@@ -8,5 +8,5 @@
 * CPU solutions provided stable scalability but faced overhead at larger scales.
 * Linear execution time observed with ITEMS_NUM and POP_SIZE.
 
-##### for more detail please reference [our presentation](https://docs.google.com/presentation/d/1DuW7L3bttCXZouUEf8UQYybLsrJLiVCzYDVq7Kd1CdY/edit#slide=id.g31e972243bc_2_52)
+##### for more detail please reference [our presentation](https://docs.google.com/presentation/d/1DuW7L3bttCXZouUEf8UQYybLsrJLiVCzYDVq7Kd1CdY/edit#slide=id.g31e972243bc_2_52) and [demo video](https://www.youtube.com/watch?v=yhGBLl74hiE&ab_channel=Ryank)
 
